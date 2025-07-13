@@ -8,10 +8,14 @@ from bs4 import BeautifulSoup
 from telegram import Bot
 import time
 
-# === Telegram config ===
-TELEGRAM_TOKEN = '8198318307:AAHB4T4za1rrCXToh92i0IV7oFf-OVIk1C4'
-CHAT_ID = '-4736861986'  # можно временно руками
+# Google Drive
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
+import tempfile
 
+# === Telegram config ===
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "твой_токен")
+CHAT_ID = os.getenv("CHAT_ID", "твой_chat_id")
 bot = Bot(token=TELEGRAM_TOKEN)
 
 # === Logging ===
@@ -20,6 +24,30 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s — %(levelname)s — %(message)s"
 )
+
+# === Google Drive Auth ===
+def init_drive():
+    gauth = GoogleAuth()
+    creds_json = os.getenv("GOOGLE_CREDENTIALS")
+    if creds_json:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp:
+            temp.write(creds_json.encode())
+            temp.flush()
+            gauth.LoadCredentialsFile(temp.name)
+    else:
+        gauth.LocalWebserverAuth()
+    return GoogleDrive(gauth)
+
+def upload_to_drive(filename, drive):
+    if not os.path.exists(filename):
+        return
+    try:
+        file_drive = drive.CreateFile({"title": filename})
+        file_drive.SetContentFile(filename)
+        file_drive.Upload()
+        logging.info(f"Загружено в Google Drive: {filename}")
+    except Exception as e:
+        logging.error(f"Ошибка загрузки в Google Drive: {e}")
 
 # === 1. Парсинг квартиры ===
 def parse_flat_info():
@@ -122,6 +150,7 @@ async def send_to_telegram(flat):
 
 # === 4. Основной async-цикл с логированием и циклическим запуском ===
 async def main():
+    drive = init_drive()
     while True:
         logging.info("Запуск проверки новых квартир")
         try:
@@ -141,10 +170,15 @@ async def main():
             save_seen(new_seen)
             logging.info(f"Найдено и отправлено новых объявлений: {new_count}")
 
+            # Загружаем файлы в Google Drive
+            upload_to_drive(SEEN_FILE, drive)
+            upload_to_drive("flat_parser.log", drive)
+
         except Exception as e:
             logging.error(f"Ошибка в основном цикле: {e}")
 
         await asyncio.sleep(600)
 
 # === 5. Запуск ===
+logging.info("🚀 Скрипт стартовал, вызываем main()")
 asyncio.run(main())
