@@ -27,25 +27,45 @@ logging.basicConfig(
 
 # === Google Drive Auth ===
 def init_drive():
-    gauth = GoogleAuth()
+    from oauth2client.service_account import ServiceAccountCredentials
+
     creds_json = os.getenv("GOOGLE_CREDENTIALS")
-    if creds_json:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp:
-            temp.write(creds_json.encode())
-            temp.flush()
-            gauth.LoadCredentialsFile(temp.name)
+    if not creds_json:
+        raise Exception("Нет переменной GOOGLE_CREDENTIALS")
+
+    if isinstance(creds_json, str):
+        creds_data = json.loads(creds_json)
     else:
-        gauth.LocalWebserverAuth()
+        creds_data = creds_json
+
+    scope = ["https://www.googleapis.com/auth/drive"]
+    credentials = ServiceAccountCredentials.from_json_keyfile_dict(creds_data, scope)
+
+    gauth = GoogleAuth()
+    gauth.credentials = credentials
     return GoogleDrive(gauth)
 
-def upload_to_drive(filename, drive):
+def upload_to_drive(filename, drive, folder_name="parcerlogs"):
     if not os.path.exists(filename):
         return
     try:
-        file_drive = drive.CreateFile({"title": filename})
+        # Проверим, есть ли папка с таким именем
+        folder_list = drive.ListFile({
+            'q': f"title='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        }).GetList()
+
+        if folder_list:
+            folder_id = folder_list[0]['id']
+        else:
+            folder_metadata = {'title': folder_name, 'mimeType': 'application/vnd.google-apps.folder'}
+            folder = drive.CreateFile(folder_metadata)
+            folder.Upload()
+            folder_id = folder['id']
+
+        file_drive = drive.CreateFile({"title": filename, "parents": [{"id": folder_id}]})
         file_drive.SetContentFile(filename)
         file_drive.Upload()
-        logging.info(f"Загружено в Google Drive: {filename}")
+        logging.info(f"Загружено в Google Drive: {filename} в папку {folder_name}")
     except Exception as e:
         logging.error(f"Ошибка загрузки в Google Drive: {e}")
 
@@ -134,8 +154,8 @@ def save_seen(seen_ids):
 # === 3. Async Telegram отправка ===
 async def send_to_telegram(flat):
     message = (
-        f"🏠 *{flat['rooms']} Zimmer* – *{flat['area']}*\n"
-        f"📍 {flat['address']}\n"
+        f"\U0001F3E0 *{flat['rooms']} Zimmer* – *{flat['area']}*\n"
+        f"\U0001F4CD {flat['address']}\n"
         f"[Подробнее]({flat['url']})"
     )
     try:
@@ -180,5 +200,5 @@ async def main():
         await asyncio.sleep(600)
 
 # === 5. Запуск ===
-logging.info("🚀 Скрипт стартовал, вызываем main()")
+logging.info("\U0001F680 Скрипт стартовал, вызываем main()")
 asyncio.run(main())
