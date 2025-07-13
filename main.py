@@ -34,6 +34,7 @@ def init_drive():
         raise Exception("Нет переменной GOOGLE_CREDENTIALS")
 
     if isinstance(creds_json, str):
+        creds_json = creds_json.replace("\\n", "\n")
         creds_data = json.loads(creds_json)
     else:
         creds_data = creds_json
