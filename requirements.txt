@@ -1,3 +1,5 @@
 python-telegram-bot==22.2
 beautifulsoup4
 requests
+pydrive
+oauth2client
