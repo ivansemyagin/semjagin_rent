@@ -34,14 +34,14 @@ def init_drive():
         raise Exception("Нет переменной GOOGLE_CREDENTIALS")
 
     if isinstance(creds_json, str):
-    try:
-        # Попробуем сразу распарсить строку
-        creds_data = json.loads(creds_json)
-    except json.JSONDecodeError as e:
-        logging.error(f"Ошибка декодирования JSON из переменной GOOGLE_CREDENTIALS: {e}")
-        raise
+        try:
+            # Попробуем сразу распарсить строку
+            creds_data = json.loads(creds_json)
+        except json.JSONDecodeError as e:
+            logging.error(f"Ошибка декодирования JSON из переменной GOOGLE_CREDENTIALS: {e}")
+            raise
     else:
-    raise ValueError("GOOGLE_CREDENTIALS должна быть строкой с JSON.")
+        raise ValueError("GOOGLE_CREDENTIALS должна быть строкой с JSON.")
 
 
     scope = ["https://www.googleapis.com/auth/drive"]
