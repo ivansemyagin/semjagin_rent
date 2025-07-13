@@ -1,6 +1,27 @@
-from bs4 import BeautifulSoup
+import json
+import os
 import requests
+import asyncio
+import logging
+from datetime import datetime
+from bs4 import BeautifulSoup
+from telegram import Bot
+import time
 
+# === Telegram config ===
+TELEGRAM_TOKEN = '8198318307:AAHB4T4za1rrCXToh92i0IV7oFf-OVIk1C4'
+CHAT_ID = '-4736861986'  # можно временно руками
+
+bot = Bot(token=TELEGRAM_TOKEN)
+
+# === Logging ===
+logging.basicConfig(
+    filename="flat_parser.log",
+    level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s"
+)
+
+# === 1. Парсинг квартиры ===
 def parse_flat_info():
     url = "https://inberlinwohnen.de/wohnungsfinder/"
     headers = {
@@ -10,10 +31,19 @@ def parse_flat_info():
         "Connection": "keep-alive",
     }
 
-    response = requests.get(url, headers=headers)
-    html = response.text  # вот это нужно передавать в BeautifulSoup
+    for attempt in range(3):
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            break
+        except requests.RequestException as e:
+            logging.warning(f"Попытка {attempt + 1} не удалась: {e}")
+            time.sleep(5)
+    else:
+        logging.error("❌ Не удалось получить страницу после 3 попыток.")
+        return []
 
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(response.text, "html.parser")
     flats = []
 
     for li in soup.select("li.tb-merkflat"):
@@ -23,41 +53,35 @@ def parse_flat_info():
         rooms = None
         detail_url = None
 
-        # ID объявления из атрибута id="flat_1273643"
         flat_id_attr = li.get("id", "")
         if flat_id_attr.startswith("flat_"):
             flat_id = flat_id_attr.replace("flat_", "").strip()
 
-        # Ссылка на подробности
         link_tag = li.find("a", class_="org-but", href=True)
         if link_tag:
-            detail_url = 'https://inberlinwohnen.de'+link_tag["href"].strip()
+            detail_url = 'https://inberlinwohnen.de' + link_tag["href"].strip()
 
-
-        # Адрес: ищем <th>Adresse:</th> → ближайший <td>
         address_row = li.find("th", string="Adresse: ")
         if address_row:
             address = address_row.find_next_sibling("td").get_text(strip=True)
 
-        # Кол-во комнат: <th>Zimmeranzahl:</th>
         rooms_row = li.find("th", string="Zimmeranzahl: ")
         if rooms_row:
-            rooms = rooms_row.find_next_sibling("td").get_text(strip=True)
+            rooms_text = rooms_row.find_next_sibling("td").get_text(strip=True)
             try:
-                rooms_value = float(rooms.replace(",", "."))
+                rooms_value = float(rooms_text.replace(",", "."))
                 if rooms_value < 3:
-                    continue  # пропускаем квартиры с < 3 комнатами
-                rooms = rooms_value
+                    continue
+                rooms = rooms_text
             except ValueError:
-                continue  # если не удалось распарсить число
+                continue
 
-        # Площадь: <th>Wohnfläche:</th>
         area_row = li.find("th", string="Wohnfläche: ")
         if area_row:
             area = area_row.find_next_sibling("td").get_text(strip=True)
 
         flats.append({
-           "id": flat_id,
+            "id": flat_id,
             "address": address,
             "rooms": rooms,
             "area": area,
@@ -66,28 +90,7 @@ def parse_flat_info():
 
     return flats
 
-
-from telegram import Bot
-
-TELEGRAM_TOKEN = '8198318307:AAHB4T4za1rrCXToh92i0IV7oFf-OVIk1C4'
-CHAT_ID = '-4736861986'  # можно временно руками
-
-bot = Bot(token=TELEGRAM_TOKEN)
-
-import asyncio
-async def send_to_telegram(flat):
-    message = (
-        f"🏠 *{flat['rooms']} Zimmer* – *{flat['area']}*\n"
-        f"📍 {flat['address']}\n"
-        f"[Подробнее]({flat['url']})"
-    )
-    await bot.send_message(chat_id=CHAT_ID, text=message, parse_mode='Markdown', disable_web_page_preview=False)
-
-
-
-import json
-import os
-
+# === 2. Seen-файл ===
 SEEN_FILE = "seen.json"
 
 def load_seen():
@@ -100,21 +103,49 @@ def save_seen(seen_ids):
     with open(SEEN_FILE, "w") as f:
         json.dump(list(seen_ids), f)
 
+# === 3. Async Telegram отправка ===
+async def send_to_telegram(flat):
+    message = (
+        f"🏠 *{flat['rooms']} Zimmer* – *{flat['area']}*\n"
+        f"📍 {flat['address']}\n"
+        f"[Подробнее]({flat['url']})"
+    )
+    try:
+        await bot.send_message(
+            chat_id=CHAT_ID,
+            text=message,
+            parse_mode='Markdown',
+            disable_web_page_preview=False
+        )
+    except Exception as e:
+        logging.error(f"Ошибка отправки Telegram: {e}")
 
+# === 4. Основной async-цикл с логированием и циклическим запуском ===
 async def main():
-    seen = load_seen()
-    new_seen = set(seen)
+    while True:
+        logging.info("Запуск проверки новых квартир")
+        try:
+            seen = load_seen()
+            new_seen = set(seen)
 
-    flats = parse_flat_info()
-    for flat in flats:
-        if flat["id"] not in seen:
-            await send_to_telegram(flat)
-            await asyncio.sleep(5)  # ⏱ пауза 1 секунда
-            new_seen.add(flat["id"])
+            flats = parse_flat_info()
+            new_count = 0
 
-    save_seen(new_seen)
+            for flat in flats:
+                if flat["id"] not in seen:
+                    await send_to_telegram(flat)
+                    await asyncio.sleep(1)
+                    new_seen.add(flat["id"])
+                    new_count += 1
+
+            save_seen(new_seen)
+            logging.info(f"Найдено и отправлено новых объявлений: {new_count}")
+
+        except Exception as e:
+            logging.error(f"Ошибка в основном цикле: {e}")
+
+        await asyncio.sleep(600)
 
 # === 5. Запуск ===
-import asyncio
 if __name__ == "__main__":
     asyncio.run(main())
