@@ -15,14 +15,14 @@ bot = Bot(token=TELEGRAM_TOKEN)
 
 # === Logging ===
 os.makedirs("/data", exist_ok=True)
-LOG_FILE = "/data/flat_parser.log"
 SEEN_FILE = "/data/seen.json"
-
+LOG_PATH = "/data/flat_parser.log"
 logging.basicConfig(
-    filename=LOG_FILE,
+    filename=LOG_PATH,
     level=logging.INFO,
     format="%(asctime)s — %(levelname)s — %(message)s"
 )
+
 
 # === 1. Парсинг квартиры ===
 def parse_flat_info():
@@ -155,6 +155,11 @@ async def main():
         await asyncio.sleep(600)
 
 # === 5. Запуск ===
-logging.info("🚀 Перед запуском main()")
-asyncio.run(main())
-logging.info("✅ После завершения main()")  # Этот лог не должен появляться
+if __name__ == "__main__":
+    logging.info("📦 Запуск контейнера")
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logging.exception(f"❌ Ошибка при запуске скрипта: {e}")
+        import time
+        time.sleep(120)  # оставляем контейнер живым 2 минуты для диагностики
