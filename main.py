@@ -46,6 +46,7 @@ def parse_flat_info():
             break
         except requests.RequestException as e:
             logging.warning(f"Попытка {attempt + 1} не удалась: {e}")
+            logging.warning(traceback.format_exc())
             time.sleep(5)
     else:
         logging.error("❌ Не удалось получить страницу после 3 попыток.")
