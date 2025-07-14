@@ -13,12 +13,12 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "твой_токен")
 CHAT_ID = os.getenv("CHAT_ID", "твой_chat_id")
 bot = Bot(token=TELEGRAM_TOKEN)
 
-# === Logging ===
+# === Пути для Volume ===
 os.makedirs("/data", exist_ok=True)
+LOG_FILE = "/data/flat_parser.log"
 SEEN_FILE = "/data/seen.json"
-LOG_PATH = "/data/flat_parser.log"
-import sys
 
+# === Logging (и в файл, и в stdout для Railway) ===
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s — %(levelname)s — %(message)s",
