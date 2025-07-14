@@ -17,12 +17,16 @@ bot = Bot(token=TELEGRAM_TOKEN)
 os.makedirs("/data", exist_ok=True)
 SEEN_FILE = "/data/seen.json"
 LOG_PATH = "/data/flat_parser.log"
-logging.basicConfig(
-    filename=LOG_PATH,
-    level=logging.INFO,
-    format="%(asctime)s — %(levelname)s — %(message)s"
-)
+import sys
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
 # === 1. Парсинг квартиры ===
 def parse_flat_info():
