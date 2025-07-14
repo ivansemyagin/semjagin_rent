@@ -9,6 +9,7 @@ from telegram import Bot
 import time
 import sys
 import traceback
+import random
 
 # === Telegram config ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "твой_токен")
@@ -33,22 +34,34 @@ logging.basicConfig(
 # === 1. Парсинг квартиры ===
 def parse_flat_info():
     url = "https://inberlinwohnen.de/wohnungsfinder/"
+    USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114 Safari/537.36",
+        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:114.0) Gecko/20100101 Firefox/114.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15",
+    ]
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        "User-Agent": random.choice(USER_AGENTS),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "de,en;q=0.9",
+        "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
         "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1"
     }
 
     for attempt in range(3):
         try:
+            time.sleep(random.uniform(2, 5))
             response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
             break
         except requests.RequestException as e:
             logging.warning(f"Попытка {attempt + 1} не удалась: {e}")
             logging.warning(traceback.format_exc())
-            time.sleep(5)
     else:
         logging.error("❌ Не удалось получить страницу после 3 попыток.")
         return []
