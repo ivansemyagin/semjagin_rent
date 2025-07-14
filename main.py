@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from telegram import Bot
 import time
 import sys
+import traceback
 
 # === Telegram config ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "твой_токен")
