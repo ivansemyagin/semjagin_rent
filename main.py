@@ -70,7 +70,7 @@ def parse_flat_info(session):
     else:
         logging.error("❌ Не удалось получить страницу после 3 попыток.")
         return []
-
+    logging.info(f"Найдено объявлений парсером: {len(response.text)}")
     soup = BeautifulSoup(response.text, "html.parser")
     flats = []
     logging.info(f"Найдено объявлений парсером: {len(soup.select("li.tb-merkflat"))}")
