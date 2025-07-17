@@ -73,7 +73,7 @@ def parse_flat_info(session):
 
     soup = BeautifulSoup(response.text, "html.parser")
     flats = []
-
+    logging.info(f"Найдено объявлений парсером: {len(soup.select("li.tb-merkflat"))}")
     for li in soup.select("li.tb-merkflat"):
         flat_id = None
         address = None
@@ -163,6 +163,7 @@ async def main():
                 new_seen = set(seen)
     
                 flats = parse_flat_info(session)
+                logging.info(f"Найдено объявлений: {len(flats)}")
                 new_count = 0
     
                 for flat in flats:
