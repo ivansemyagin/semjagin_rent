@@ -86,7 +86,7 @@ def parse_flat_info(session):
         logging.error("❌ Не удалось получить страницу после 3 попыток.")
         return []
     
-    logging.info(f"Текст: {html}")
+    logging.info(f"Текст: {html[:100]}")
     soup = BeautifulSoup(html, "html.parser")
     flats = []
     logging.info(f"Найдено объявлений парсером: {len(soup.select("li.tb-merkflat"))}")
@@ -185,7 +185,7 @@ async def main():
     
                 for flat in flats:
                     if flat["id"] not in seen:
-                      #  await send_to_telegram(flat)
+                        await send_to_telegram(flat)
                         await asyncio.sleep(1)
                         new_seen.add(flat["id"])
                         new_count += 1
