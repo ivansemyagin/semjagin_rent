@@ -62,6 +62,9 @@ def parse_flat_info(session):
         try:
             time.sleep(random.uniform(2, 5))
             response = session.get(url, headers=headers, timeout=20)
+            logging.info(f"Encoding: {response.encoding}")
+            logging.info(f"Content-Encoding: {response.headers.get('Content-Encoding')}")
+            logging.info(f"Content-Type: {response.headers.get('Content-Type')}")
             response.raise_for_status()
             break
         except requests.RequestException as e:
