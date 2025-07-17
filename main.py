@@ -69,14 +69,14 @@ def parse_flat_info(session):
             logging.info(f"Content-Type: {response.headers.get('Content-Type')}")
             response.raise_for_status()
             content_encoding = response.headers.get('Content-Encoding', '')
-            if 'br' in content_encoding:
-                html = brotli.decompress(response.content).decode('utf-8')
-            elif 'gzip' in content_encoding:
-                import gzip
-                buf = BytesIO(response.content)
-                html = gzip.GzipFile(fileobj=buf).read().decode('utf-8')
-            else:
-                html = response.text
+            #if 'br' in content_encoding:
+             #   html = brotli.decompress(response.content).decode('utf-8')
+            #elif 'gzip' in content_encoding:
+            #    import gzip
+            #   buf = BytesIO(response.content)
+             #   html = gzip.GzipFile(fileobj=buf).read().decode('utf-8')
+            #else:
+            html = response.text
 
             break
         except requests.RequestException as e:
