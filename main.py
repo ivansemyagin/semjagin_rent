@@ -10,6 +10,8 @@ import time
 import sys
 import traceback
 import random
+from fake_useragent import UserAgent
+ua = UserAgent()
 
 # === Telegram config ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "твой_токен")
@@ -32,7 +34,7 @@ logging.basicConfig(
 )
 
 # === 1. Парсинг квартиры ===
-def parse_flat_info():
+def parse_flat_info(session):
     url = "https://inberlinwohnen.de/wohnungsfinder/"
     USER_AGENTS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114 Safari/537.36",
@@ -40,23 +42,26 @@ def parse_flat_info():
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15",
     ]
 
+        # Заголовки можно сделать еще более полными
     headers = {
-        "User-Agent": random.choice(USER_AGENTS),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+        "User-Agent": ua.random,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "de-DE,de;q=0.8,en-US;q=0.5,en;q=0.3",
         "Accept-Encoding": "gzip, deflate, br",
         "Connection": "keep-alive",
         "Upgrade-Insecure-Requests": "1",
         "Sec-Fetch-Dest": "document",
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1"
+        "Sec-Fetch-User": "?1",
+        "TE": "trailers"
     }
+
 
     for attempt in range(3):
         try:
             time.sleep(random.uniform(2, 5))
-            response = requests.get(url, headers=headers, timeout=10)
+            response = session.get(url, headers=headers, timeout=20)
             response.raise_for_status()
             break
         except requests.RequestException as e:
@@ -151,28 +156,31 @@ async def send_to_telegram(flat):
 async def main():
     logging.info("▶️ Скрипт запустился в Railway")
     while True:
-        logging.info("\U0001F50D Запуск проверки новых квартир")
-        try:
-            seen = load_seen()
-            new_seen = set(seen)
-
-            flats = parse_flat_info()
-            new_count = 0
-
-            for flat in flats:
-                if flat["id"] not in seen:
-                    await send_to_telegram(flat)
-                    await asyncio.sleep(1)
-                    new_seen.add(flat["id"])
-                    new_count += 1
-
-            save_seen(new_seen)
-            logging.info(f"Найдено и отправлено новых объявлений: {new_count}")
-
-        except Exception as e:
-            logging.error(f"Ошибка в основном цикле: {e}")
-
+        with requests.Session() as session:
+            logging.info("\U0001F50D Запуск проверки новых квартир")
+            try:
+                seen = load_seen()
+                new_seen = set(seen)
+    
+                flats = parse_flat_info(session)
+                new_count = 0
+    
+                for flat in flats:
+                    if flat["id"] not in seen:
+                      #  await send_to_telegram(flat)
+                        await asyncio.sleep(1)
+                        new_seen.add(flat["id"])
+                        new_count += 1
+    
+                save_seen(new_seen)
+                logging.info(f"Найдено и отправлено новых объявлений: {new_count}")
+    
+            except Exception as e:
+                logging.error(f"Ошибка в основном цикле: {e}")
+    
         await asyncio.sleep(600)
+
+
 
 # === 5. Запуск ===
 if __name__ == "__main__":
