@@ -111,7 +111,7 @@ def parse_flat_info(session):
             rooms_text = rooms_row.find_next_sibling("td").get_text(strip=True)
             try:
                 rooms_value = float(rooms_text.replace(",", "."))
-                if rooms_value < 3:
+                if rooms_value < 4:
                     continue
                 rooms = rooms_text
             except ValueError:
