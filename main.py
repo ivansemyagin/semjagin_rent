@@ -88,6 +88,10 @@ def parse_flat_info(session):
     logging.info(f"Найдено объявлений парсером: {len(soup.select("li.tb-merkflat"))}")
     
     for li in soup.select("li.tb-merkflat"):
+        # Пропускаем, если требуется Wohnberechtigungsschein
+        if not li.find("a", class_="icon wbs nohand2"):
+            continue
+        
         flat_id = None
         address = None
         area = None
