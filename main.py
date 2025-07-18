@@ -23,7 +23,7 @@ bot = Bot(token=TELEGRAM_TOKEN)
 # === Пути для Volume ===
 os.makedirs("/data", exist_ok=True)
 LOG_FILE = "/data/flat_parser.log"
-SEEN_FILE = "/data/seen.json"
+SEEN_FILE = "/data/seen1.json"
 
 # === Logging (и в файл, и в stdout для Railway) ===
 logging.basicConfig(
@@ -64,9 +64,6 @@ def parse_flat_info(session):
         try:
             time.sleep(random.uniform(2, 5))
             response = session.get(url, headers=headers, timeout=20)
-            logging.info(f"Encoding: {response.encoding}")
-            logging.info(f"Content-Encoding: {response.headers.get('Content-Encoding')}")
-            logging.info(f"Content-Type: {response.headers.get('Content-Type')}")
             response.raise_for_status()
             content_encoding = response.headers.get('Content-Encoding', '')
             #if 'br' in content_encoding:
@@ -86,7 +83,6 @@ def parse_flat_info(session):
         logging.error("❌ Не удалось получить страницу после 3 попыток.")
         return []
     
-    logging.info(f"Текст: {html[:100]}")
     soup = BeautifulSoup(html, "html.parser")
     flats = []
     logging.info(f"Найдено объявлений парсером: {len(soup.select("li.tb-merkflat"))}")
