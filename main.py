@@ -196,7 +196,7 @@ async def main():
             except Exception as e:
                 logging.error(f"Ошибка в основном цикле: {e}")
     
-        await asyncio.sleep(600)
+        await asyncio.sleep(300)
 
 
 
@@ -207,5 +207,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except Exception as e:
         logging.exception(f"❌ Ошибка при запуске скрипта: {e}")
-        import time
-        time.sleep(120)  # оставляем контейнер живым 2 минуты для диагностики
+
