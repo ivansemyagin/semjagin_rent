@@ -39,7 +39,7 @@ logging.basicConfig(
 
 # === 1. Парсинг квартиры с учетом пагинации ===
 def parse_flat_info(session):
-    base_url = "https://www.inberlinwohnen.de/wohnungsfinder"
+    base_url = "https://www.inberlinwohnen.de/wohnungsfinder/"
 
     headers = {
         "User-Agent": ua.random,
@@ -84,14 +84,12 @@ def parse_flat_info(session):
         logging.info(f"Найдено объявлений на странице: {len(listings)}")
 
         for item in listings:
-            if "wbs" in item.get_text().lower():
-                continue
 
             flat_id_attr = item.get("id", "")
             flat_id = flat_id_attr.replace("apartment-", "").strip() if flat_id_attr else None
 
             link_tag = item.find("a", href=True)
-            detail_url = urljoin(base_url, link_tag["href"].strip()) if link_tag else None
+            detail_url = urljoin(url, link_tag["href"].strip()) if link_tag else None
 
             info_span = item.find("span", class_="block")
             if not info_span:
@@ -130,14 +128,14 @@ def parse_flat_info(session):
         for sel in selectors:
             link = soup.select_one(f"{sel}[href]")
             if link:
-                candidate = urljoin(base_url, link["href"])
+                candidate = urljoin(url, link["href"])
                 if candidate not in visited:
                     next_url = candidate
                     break
         if not next_url:
             for a in soup.find_all("a", href=True):
                 if a.get_text(strip=True) in (">", "›", "Weiter", "Next", "»"):
-                    candidate = urljoin(base_url, a["href"])
+                    candidate = urljoin(url, a["href"])
                     if candidate not in visited:
                         next_url = candidate
                         break
