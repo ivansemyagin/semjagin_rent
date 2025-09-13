@@ -14,6 +14,8 @@ from fake_useragent import UserAgent
 ua = UserAgent()
 import brotli
 from io import BytesIO
+import re
+from urllib.parse import urljoin
 
 # === Telegram config ===
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "твой_токен")
@@ -35,16 +37,10 @@ logging.basicConfig(
     ]
 )
 
-# === 1. Парсинг квартиры ===
+# === 1. Парсинг квартиры с учетом пагинации ===
 def parse_flat_info(session):
-    url = "https://inberlinwohnen.de/wohnungsfinder/"
-    USER_AGENTS = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114 Safari/537.36",
-        "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:114.0) Gecko/20100101 Firefox/114.0",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_3_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15",
-    ]
+    base_url = "https://www.inberlinwohnen.de/wohnungsfinder"
 
-        # Заголовки можно сделать еще более полными
     headers = {
         "User-Agent": ua.random,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -56,82 +52,97 @@ def parse_flat_info(session):
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Site": "none",
         "Sec-Fetch-User": "?1",
-        "TE": "trailers"
+        "TE": "trailers",
     }
 
-
-    for attempt in range(3):
-        try:
-            time.sleep(random.uniform(2, 5))
-            response = session.get(url, headers=headers, timeout=20)
-            response.raise_for_status()
-            content_encoding = response.headers.get('Content-Encoding', '')
-            #if 'br' in content_encoding:
-             #   html = brotli.decompress(response.content).decode('utf-8')
-            #elif 'gzip' in content_encoding:
-            #    import gzip
-            #   buf = BytesIO(response.content)
-             #   html = gzip.GzipFile(fileobj=buf).read().decode('utf-8')
-            #else:
-            html = response.text
-
-            break
-        except requests.RequestException as e:
-            logging.warning(f"Попытка {attempt + 1} не удалась: {e}")
-            logging.warning(traceback.format_exc())
-    else:
-        logging.error("❌ Не удалось получить страницу после 3 попыток.")
-        return []
-    
-    soup = BeautifulSoup(html, "html.parser")
     flats = []
-    logging.info(f"Найдено объявлений парсером: {len(soup.select("li.tb-merkflat"))}")
-    
-    for li in soup.select("li.tb-merkflat"):
-        # Пропускаем, если требуется Wohnberechtigungsschein
-        if not li.find("a", class_="icon wbs nohand2"):
-            continue
-        
-        flat_id = None
-        address = None
-        area = None
-        rooms = None
-        detail_url = None
+    next_url = base_url
+    visited = set()
 
-        flat_id_attr = li.get("id", "")
-        if flat_id_attr.startswith("flat_"):
-            flat_id = flat_id_attr.replace("flat_", "").strip()
+    while next_url and next_url not in visited:
+        url = next_url
+        visited.add(url)
 
-        link_tag = li.find("a", class_="org-but", href=True)
-        if link_tag:
-            detail_url = 'https://inberlinwohnen.de' + link_tag["href"].strip()
+        # загрузка одной страницы объявлений
+        for attempt in range(3):
+            try:
+                time.sleep(random.uniform(2, 5))
+                response = session.get(url, headers=headers, timeout=20)
+                response.raise_for_status()
+                html = response.text
+                break
+            except requests.RequestException as e:
+                logging.warning(f"Попытка {attempt + 1} не удалась: {e}")
+                logging.warning(traceback.format_exc())
+        else:
+            logging.error(f"❌ Не удалось получить страницу {url} после 3 попыток.")
+            break
 
-        address_row = li.find("th", string="Adresse: ")
-        if address_row:
-            address = address_row.find_next_sibling("td").get_text(strip=True)
+        soup = BeautifulSoup(html, "html.parser")
 
-        rooms_row = li.find("th", string="Zimmeranzahl: ")
-        if rooms_row:
-            rooms_text = rooms_row.find_next_sibling("td").get_text(strip=True)
+        listings = soup.select("div[id^='apartment-']")
+        logging.info(f"Найдено объявлений на странице: {len(listings)}")
+
+        for item in listings:
+            if "wbs" in item.get_text().lower():
+                continue
+
+            flat_id_attr = item.get("id", "")
+            flat_id = flat_id_attr.replace("apartment-", "").strip() if flat_id_attr else None
+
+            link_tag = item.find("a", href=True)
+            detail_url = urljoin(base_url, link_tag["href"].strip()) if link_tag else None
+
+            info_span = item.find("span", class_="block")
+            if not info_span:
+                continue
+            info_text = " ".join(info_span.stripped_strings)
+            match = re.search(r"(\d+,\d+)\s*Zimmer,\s*(\d+,\d+)\s*m²,\s*[\d.,]+\s*€.*?,\s*(.*)", info_text)
+            if not match:
+                continue
+            rooms_text, area_val, address = match.groups()
             try:
                 rooms_value = float(rooms_text.replace(",", "."))
                 if rooms_value < 4:
                     continue
-                rooms = rooms_text
             except ValueError:
                 continue
 
-        area_row = li.find("th", string="Wohnfläche: ")
-        if area_row:
-            area = area_row.find_next_sibling("td").get_text(strip=True)
+            area = f"{area_val} m²"
+            rooms = rooms_text
 
-        flats.append({
-            "id": flat_id,
-            "address": address,
-            "rooms": rooms,
-            "area": area,
-            "url": detail_url
-        })
+            flats.append({
+                "id": flat_id,
+                "address": address,
+                "rooms": rooms,
+                "area": area,
+                "url": detail_url,
+            })
+
+        # поиск ссылки на следующую страницу
+        next_url = None
+        selectors = [
+            "a[rel='next']",
+            "a.next",
+            "li.next a",
+            "a.pagination-next",
+        ]
+        for sel in selectors:
+            link = soup.select_one(f"{sel}[href]")
+            if link:
+                candidate = urljoin(base_url, link["href"])
+                if candidate not in visited:
+                    next_url = candidate
+                    break
+        if not next_url:
+            for a in soup.find_all("a", href=True):
+                if a.get_text(strip=True) in (">", "›", "Weiter", "Next", "»"):
+                    candidate = urljoin(base_url, a["href"])
+                    if candidate not in visited:
+                        next_url = candidate
+                        break
+        if next_url:
+            logging.info(f"Переходим на следующую страницу: {next_url}")
 
     return flats
 
